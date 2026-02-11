@@ -14,7 +14,11 @@ class OrderController extends Controller
 {
     public function index(): View
     {
-        $orders = Order::with(['user', 'items'])
+        // Optimize: Select only needed columns and eager load relationships
+        $orders = Order::select('id', 'order_number', 'customer_name', 'customer_phone', 'customer_email', 'total_price', 'invoice_date', 'created_at', 'user_id')
+            ->with(['user:id,name', 'items' => function ($query) {
+                $query->select('id', 'order_id', 'service_type', 'price');
+            }])
             ->latest()
             ->paginate(15);
 
@@ -28,7 +32,10 @@ class OrderController extends Controller
 
     public function edit(Order $order): View
     {
-        $order->load(['items']);
+        // Optimize: Load items with only needed columns
+        $order->load(['items' => function ($query) {
+            $query->select('id', 'order_id', 'service_type', 'service_data', 'price', 'original_price', 'notes');
+        }]);
 
         return view('admin.orders.edit', compact('order'));
     }
@@ -67,6 +74,9 @@ class OrderController extends Controller
             ]);
         }
 
+        // Clear cache after update
+        Cache::forget('recent_orders_' . auth()->id());
+
         return redirect()->route('admin.pesanan')
             ->with('success', 'Pesanan berhasil diperbarui.');
     }
@@ -75,20 +85,25 @@ class OrderController extends Controller
     {
         $order->delete();
 
+        // Clear cache after delete
+        Cache::forget('recent_orders_' . auth()->id());
+
         return redirect()->route('admin.pesanan')
             ->with('success', 'Pesanan berhasil dihapus.');
     }
 
     public function showInvoice(Order $order): View
     {
-        $order->load(['user', 'items']);
+        // Optimize: Load only needed relationships
+        $order->load(['items']);
 
         return view('admin.orders.invoice', compact('order'));
     }
 
     public function showKwitansi(Order $order): View
     {
-        $order->load(['user', 'items']);
+        // Optimize: Load only needed relationships
+        $order->load(['items']);
 
         return view('admin.orders.kwitansi', compact('order'));
     }
@@ -124,6 +139,9 @@ class OrderController extends Controller
                 'notes' => $item['notes'] ?? null,
             ]);
         }
+
+        // Clear cache after create
+        Cache::forget('recent_orders_' . auth()->id());
 
         $message = 'Pesanan berhasil dibuat.';
 

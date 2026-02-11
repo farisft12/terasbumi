@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 
 class DashboardController extends Controller
@@ -54,10 +55,14 @@ class DashboardController extends Controller
                 break;
         }
         
-        // Get orders with items
-        $orders = $query->with('items')->get();
+        // Optimize: Use select only needed columns and eager load items
+        $orders = $query->select('id', 'total_price', 'invoice_date')
+            ->with(['items' => function ($query) {
+                $query->select('id', 'order_id', 'original_price');
+            }])
+            ->get();
         
-        // Calculate totals
+        // Calculate totals efficiently
         $totalOrders = $orders->count();
         $totalRevenue = $orders->sum('total_price');
         $totalExpenses = $orders->sum(function ($order) {
@@ -65,11 +70,17 @@ class DashboardController extends Controller
         });
         $totalProfit = $totalRevenue - $totalExpenses;
         
-        // Get recent orders (all time)
-        $recentOrders = Order::with(['items', 'user'])
-            ->latest('invoice_date')
-            ->take(5)
-            ->get();
+        // Get recent orders (all time) - optimized with select and cache
+        $cacheKey = 'recent_orders_' . auth()->id();
+        $recentOrders = Cache::remember($cacheKey, 60, function () {
+            return Order::select('id', 'order_number', 'customer_name', 'total_price', 'invoice_date', 'created_at', 'user_id')
+                ->with(['items' => function ($query) {
+                    $query->select('id', 'order_id', 'service_type', 'price');
+                }, 'user:id,name'])
+                ->latest('invoice_date')
+                ->take(5)
+                ->get();
+        });
 
         $summary = [
             'total_orders' => $totalOrders,

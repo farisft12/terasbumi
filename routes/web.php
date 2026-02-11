@@ -20,6 +20,16 @@ Route::middleware('guest')->group(function () {
     Route::post('/register', [RegisterController::class, 'register']);
 });
 
+// Redirect authenticated users away from login/register
+Route::middleware('auth')->group(function () {
+    Route::get('/login', function () {
+        return redirect()->route('admin.dashboard');
+    });
+    Route::get('/register', function () {
+        return redirect()->route('admin.dashboard');
+    });
+});
+
 // Logout Route (Authenticated only)
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
@@ -52,6 +62,10 @@ Route::middleware('auth')->prefix('admin')->name('admin.')->group(function () {
     })->name('biaya');
 
     Route::get('/laporan', [\App\Http\Controllers\Admin\ReportController::class, 'index'])->name('laporan');
+    Route::get('/laporan/print', [\App\Http\Controllers\Admin\ReportController::class, 'print'])->name('laporan.print');
+
+    // Database Routes
+    Route::get('/database/download', [\App\Http\Controllers\Admin\DatabaseController::class, 'download'])->name('database.download');
 
     // Settings Routes
     Route::prefix('settings')->name('settings.')->group(function () {
